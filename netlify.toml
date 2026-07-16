@@ -1,0 +1,13 @@
+# Netlify 빌드·배포 설정
+# Vite로 만든 React 앱을 빌드해서 dist 폴더를 배포한다.
+
+[build]
+  command = "npm run build"   # 빌드 명령
+  publish = "dist"            # 빌드 결과물 폴더 (Vite 기본값)
+
+# SPA 라우팅: /contracts/:id 같은 주소를 새로고침해도 index.html로 보내서
+# React Router가 처리하게 한다. 이 줄이 없으면 배포 후 딥링크가 404 난다.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

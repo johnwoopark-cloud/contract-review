@@ -1,12 +1,10 @@
 // 계약 목록 화면.
-// contracts 테이블을 불러와 부서·팀·의뢰자·계약명·상태 5열로 보여준다.
-// "누가 무엇을 보느냐"(의뢰자=본인 건 / 변호사·관리자=전체)는
-// DB 의 RLS 정책이 자동으로 걸러주므로, 여기서는 그냥 전부 요청하면 된다.
+// 행을 클릭하면 그 계약의 상세(타임라인) 페이지로 이동한다.
 
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
-// 상태 코드 → 한글 라벨
 const STATUS_LABEL = {
   draft: '요청 준비',
   lawyer_reviewing: '변호사 검토',
@@ -21,15 +19,14 @@ export default function ContractList() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const navigate = useNavigate()
 
   useEffect(() => {
     async function load() {
-      // 계약 + 의뢰자(owner) 프로필의 부서·팀·성명을 함께 가져온다.
       const { data, error } = await supabase
         .from('contracts')
         .select('id, title, status, current_round, owner:owner_id ( name, department, team )')
         .order('updated_at', { ascending: false })
-
       if (error) setError(error.message)
       else setRows(data ?? [])
       setLoading(false)
@@ -47,6 +44,13 @@ export default function ContractList() {
         <p style={styles.msg}>아직 등록된 계약이 없습니다. ‘신규 검토 요청’으로 시작하세요.</p>
       ) : (
         <table style={styles.table}>
+          <colgroup>
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '16%' }} />
+            <col style={{ width: '30%' }} />
+            <col style={{ width: '18%' }} />
+          </colgroup>
           <thead>
             <tr style={styles.headRow}>
               <th style={styles.th}>부서</th>
@@ -58,7 +62,13 @@ export default function ContractList() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} style={styles.row}>
+              <tr
+                key={r.id}
+                style={styles.row}
+                onClick={() => navigate(`/contracts/${r.id}`)}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#faf9f8')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+              >
                 <td style={styles.td}>{r.owner?.department ?? '-'}</td>
                 <td style={styles.td}>{r.owner?.team ?? '-'}</td>
                 <td style={styles.td}>{r.owner?.name ?? '-'}</td>
@@ -80,9 +90,9 @@ const styles = {
   wrap: { padding: '16px 20px', fontFamily: 'sans-serif' },
   h2: { fontSize: 15, fontWeight: 500, margin: '0 0 12px' },
   msg: { padding: '16px 20px', color: '#78716c', fontSize: 13, fontFamily: 'sans-serif' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13, tableLayout: 'fixed' },
   headRow: { textAlign: 'left', color: '#78716c' },
-  th: { padding: '8px 6px', fontWeight: 400, borderBottom: '1px solid #e7e5e4' },
-  row: { borderBottom: '1px solid #f0efed' },
-  td: { padding: '10px 6px' },
+  th: { padding: '8px 6px', fontWeight: 400, borderBottom: '1px solid #e7e5e4', textAlign: 'left' },
+  row: { borderBottom: '1px solid #f0efed', cursor: 'pointer' },
+  td: { padding: '10px 6px', textAlign: 'left' },
 }

@@ -1,36 +1,50 @@
-// 1단계용 최소 화면.
-// 목적: 앱이 배포되고 Supabase 에 연결되는지만 확인한다.
-// 다음 단계부터 여기에 로그인·목록·상세 화면을 붙인다.
+// 앱의 뼈대. 로그인 여부에 따라 화면을 나눈다.
+//  - 로그인 안 됨  → 로그인 화면
+//  - 로그인 됨      → 상단바 + 좌측 메뉴 + 본문(라우팅)
 
-import { useEffect, useState } from 'react'
-import { supabase } from './supabaseClient'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider, useAuth } from './AuthContext'
+import Login from './pages/Login'
+import ContractList from './pages/ContractList'
+import NewRequest from './pages/NewRequest'
+import TopBar from './components/TopBar'
+import Sidebar from './components/Sidebar'
+
+function AppShell() {
+  return (
+    <div>
+      <TopBar />
+      <div style={{ display: 'flex', minHeight: 'calc(100vh - 45px)' }}>
+        <Sidebar />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Routes>
+            <Route path="/contracts" element={<ContractList />} />
+            <Route path="/contracts/new" element={<NewRequest />} />
+            <Route path="/search" element={<Placeholder title="검색 (다음 단계)" />} />
+            <Route path="*" element={<Navigate to="/contracts" replace />} />
+          </Routes>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Placeholder({ title }) {
+  return <p style={{ padding: '16px 20px', color: '#78716c', fontFamily: 'sans-serif', fontSize: 13 }}>{title}</p>
+}
+
+function Gate() {
+  const { session, loading } = useAuth()
+  if (loading) return <p style={{ padding: 24, fontFamily: 'sans-serif' }}>불러오는 중…</p>
+  return session ? <AppShell /> : <Login />
+}
 
 export default function App() {
-  // status = 연결 확인 결과를 담는 상태(state).
-  // 값이 바뀌면 React 가 화면을 자동으로 다시 그린다.
-  const [status, setStatus] = useState('확인 중…')
-
-  useEffect(() => {
-    // 앱이 처음 열릴 때 한 번 실행된다.
-    // Supabase 에 아주 가벼운 요청을 보내 연결 여부만 확인한다.
-    async function checkConnection() {
-      const { error } = await supabase.auth.getSession()
-      if (error) {
-        setStatus('연결 실패: ' + error.message)
-      } else {
-        setStatus('Supabase 연결 성공')
-      }
-    }
-    checkConnection()
-  }, [])
-
   return (
-    <div style={{ fontFamily: 'sans-serif', padding: '2rem', maxWidth: 640, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 20, fontWeight: 500 }}>계약 사전검토 — 셋업 확인</h1>
-      <p style={{ color: '#555' }}>{status}</p>
-      <p style={{ color: '#999', fontSize: 13 }}>
-        이 화면이 보이고 “연결 성공”이 뜨면 1단계 환경 구축이 끝난 것입니다.
-      </p>
-    </div>
+    <AuthProvider>
+      <BrowserRouter>
+        <Gate />
+      </BrowserRouter>
+    </AuthProvider>
   )
 }

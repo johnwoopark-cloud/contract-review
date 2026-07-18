@@ -1,5 +1,4 @@
-// 앱의 뼈대. 로그인 여부에 따라 화면을 나눈다.
-// 서비스명 문구는 TopBar.jsx / Login.jsx 에 있다.
+// 앱의 뼈대. 서비스명 문구는 TopBar.jsx / Login.jsx 에 있다.
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './AuthContext'
@@ -7,6 +6,7 @@ import Login from './pages/Login'
 import ContractList from './pages/ContractList'
 import NewRequest from './pages/NewRequest'
 import ContractDetail from './pages/ContractDetail'
+import LawyerReview from './pages/LawyerReview'
 import TopBar from './components/TopBar'
 import Sidebar from './components/Sidebar'
 
@@ -21,6 +21,7 @@ function AppShell() {
             <Route path="/contracts" element={<ContractList />} />
             <Route path="/contracts/new" element={<NewRequest />} />
             <Route path="/contracts/:id" element={<ContractDetail />} />
+            <Route path="/contracts/:id/review" element={<LawyerReview />} />
             <Route path="/search" element={<Placeholder title="검색 (다음 단계)" />} />
             <Route path="*" element={<Navigate to="/contracts" replace />} />
           </Routes>

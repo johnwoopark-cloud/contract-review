@@ -74,6 +74,24 @@ export default function ContractDetail() {
     } catch (e) { alert('처리 실패: ' + e.message) } finally { setBusy(false) }
   }
 
+  // 내부 기안 완료 → 날인 단계로
+  async function handleDrafted() {
+    if (!window.confirm('내부 기안을 완료하고 날인 단계로 넘어갈까요?')) return
+    setBusy(true)
+    try {
+      await supabase.from('contracts').update({ status: 'sealing' }).eq('id', id)
+      await supabase.from('history').insert({ contract_id: id, event: 'drafted', actor_id: session.user.id, detail: {} })
+      if (contract.lawyer_id) {
+        const dept = profile?.department ?? ''; const who = profile?.name ?? ''
+        await supabase.from('notifications').insert({
+          contract_id: id, recipient_id: contract.lawyer_id, type: 'drafted',
+          title: `[${dept}·${who}] ${contract.title} 기안이 완료되었습니다.`,
+        })
+      }
+      await load()
+    } catch (e) { alert('처리 실패: ' + e.message) } finally { setBusy(false) }
+  }
+
   if (loading) return <p style={st.msg}>불러오는 중…</p>
   if (error) return <p style={st.msg}>오류: {error}</p>
   if (!contract) return <p style={st.msg}>계약을 찾을 수 없습니다.</p>
@@ -85,6 +103,8 @@ export default function ContractDetail() {
   const isOwner = session?.user?.id === contract.owner_id
   const canReview = profile?.role === 'lawyer' && contract.status === 'lawyer_reviewing'
   const canClientAct = isOwner && contract.status === 'client_reviewing'
+  const canDrafted = isOwner && contract.status === 'internal_approval'
+  const canSeal = isOwner && contract.status === 'sealing'
 
   // 특정 라운드의 요청 메시지 / 코멘트 찾기
   function roundOf(no) { return rounds.find((r) => r.round_no === no) }
@@ -111,6 +131,12 @@ export default function ContractDetail() {
             <button style={st.actionLight} onClick={() => navigate(`/contracts/${id}/resubmit`)}>재검토 요청</button>
             <button style={st.action} disabled={busy} onClick={handleDraftReady}>기안 준비 완료</button>
           </>
+        )}
+        {canDrafted && (
+          <button style={st.action} disabled={busy} onClick={handleDrafted}>기안 완료</button>
+        )}
+        {canSeal && (
+          <button style={st.action} onClick={() => navigate(`/contracts/${id}/seal`)}>날인본 업로드</button>
         )}
       </div>
 

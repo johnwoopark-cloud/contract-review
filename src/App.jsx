@@ -8,6 +8,7 @@ import NewRequest from './pages/NewRequest'
 import ContractDetail from './pages/ContractDetail'
 import LawyerReview from './pages/LawyerReview'
 import ClientResubmit from './pages/ClientResubmit'
+import SealUpload from './pages/SealUpload'
 import TopBar from './components/TopBar'
 import Sidebar from './components/Sidebar'
 
@@ -24,6 +25,7 @@ function AppShell() {
             <Route path="/contracts/:id" element={<ContractDetail />} />
             <Route path="/contracts/:id/review" element={<LawyerReview />} />
             <Route path="/contracts/:id/resubmit" element={<ClientResubmit />} />
+            <Route path="/contracts/:id/seal" element={<SealUpload />} />
             <Route path="/search" element={<Placeholder title="검색 (다음 단계)" />} />
             <Route path="*" element={<Navigate to="/contracts" replace />} />
           </Routes>

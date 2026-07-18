@@ -66,15 +66,21 @@ export default function LawyerReview() {
       const round = contract.current_round // 현재 라운드(요청 시 부여됨)
       const nextVersion = await nextFileVersion(id)
 
+      // 이 라운드의 round_id 를 찾아둔다 (코멘트를 라운드에 연결하기 위함)
+      const { data: rd } = await supabase.from('review_rounds')
+        .select('id').eq('contract_id', id).eq('round_no', round).single()
+      const roundId = rd?.id ?? null
+
       // 1) 수정본 업로드 (revision)
       await uploadFilePair({ contractId: id, kind: 'revision', version: nextVersion, pdfFile, hwpFile })
 
-      // 2) 코멘트 저장 (조항+내용이 있는 것만)
+      // 2) 코멘트 저장 (조항+내용이 있는 것만) — round_id 로 라운드에 연결
       const validComments = comments.filter((c) => c.body.trim())
       if (validComments.length > 0) {
         await supabase.from('comments').insert(
           validComments.map((c) => ({
             contract_id: id,
+            round_id: roundId,
             author_id: session.user.id,
             clause_ref: c.clause.trim() || null,
             body: c.body.trim(),

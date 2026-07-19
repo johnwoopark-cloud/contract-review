@@ -1,11 +1,7 @@
-// 변호사 검토 화면 (단순 버전).
-//  - 계약서 파일은 '열기'로 새 탭에서 본다(넓은 본문+코멘트 앵커링은 이후 고도화).
-//  - 조항(clause_ref) + 코멘트 내용을 여러 개 작성.
-//  - 수정본 파일(HWP+PDF) 업로드.
-//  - '검토 완료' → 상태를 client_reviewing 으로, 코멘트 저장, 라운드 결과 기록,
-//                  히스토리 + 의뢰자 노티.
-//
-// 접근: 변호사(role=lawyer)만 의미가 있다. 상태가 lawyer_reviewing 일 때만 완료 가능.
+// 변호사 검토 화면 (고도화: 왼쪽 본문 PDF + 오른쪽 조항 코멘트).
+//  - 왼쪽: 최신 계약서 PDF 를 iframe 으로 크게 표시 (서명 URL)
+//  - 오른쪽: 조항(제N조) + 코멘트 여러 개 작성, 수정본 업로드, 검토 완료
+//  - 앵커링은 문자열(조항) 기준(설계 결정). iframe 이라 문자 하이라이트는 없음.
 
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -20,8 +16,9 @@ export default function LawyerReview() {
   const { session, profile } = useAuth()
 
   const [contract, setContract] = useState(null)
-  const [latestFiles, setLatestFiles] = useState([])
-  const [comments, setComments] = useState([{ clause: '', body: '' }]) // 입력용 코멘트들
+  const [pdfUrl, setPdfUrl] = useState('')      // 왼쪽에 띄울 PDF
+  const [pdfList, setPdfList] = useState([])    // 볼 수 있는 PDF 파일들(버전 선택)
+  const [comments, setComments] = useState([{ clause: '', body: '' }])
   const [pdfFile, setPdfFile] = useState(null)
   const [hwpFile, setHwpFile] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -33,86 +30,66 @@ export default function LawyerReview() {
       const c = await supabase.from('contracts').select('*').eq('id', id).single()
       if (c.error) { setError(c.error.message); setLoading(false); return }
       setContract(c.data)
-      // 가장 최근 파일 몇 개(열어보기용)
+
+      // PDF 파일들(최신순) — 왼쪽 뷰어용
       const f = await supabase.from('files').select('*')
-        .eq('contract_id', id).order('created_at', { ascending: false }).limit(4)
-      setLatestFiles(f.data ?? [])
+        .eq('contract_id', id).eq('format', 'pdf').order('version', { ascending: false })
+      const list = f.data ?? []
+      setPdfList(list)
+      if (list.length > 0) {
+        try { setPdfUrl(await getFileUrl(list[0].storage_path)) } catch { /* noop */ }
+      }
       setLoading(false)
     }
     load()
   }, [id])
 
-  function updateComment(i, key, val) {
-    setComments((cs) => cs.map((c, idx) => (idx === i ? { ...c, [key]: val } : c)))
-  }
-  function addComment() { setComments((cs) => [...cs, { clause: '', body: '' }]) }
-  function removeComment(i) { setComments((cs) => cs.filter((_, idx) => idx !== i)) }
-
-  async function openFile(path) {
-    try { window.open(await getFileUrl(path), '_blank') }
+  async function showPdf(file) {
+    try { setPdfUrl(await getFileUrl(file.storage_path)) }
     catch (e) { alert('파일 열기 오류: ' + e.message) }
   }
 
+  function updateComment(i, key, val) { setComments((cs) => cs.map((c, idx) => (idx === i ? { ...c, [key]: val } : c))) }
+  function addComment() { setComments((cs) => [...cs, { clause: '', body: '' }]) }
+  function removeComment(i) { setComments((cs) => cs.filter((_, idx) => idx !== i)) }
+
   async function handleComplete() {
     setError('')
-    if (!contract) return
-    if (contract.status !== 'lawyer_reviewing') {
-      return setError('지금은 변호사 검토 단계가 아닙니다.')
-    }
+    if (contract.status !== 'lawyer_reviewing') return setError('지금은 변호사 검토 단계가 아닙니다.')
     if (!pdfFile) return setError('수정본 PDF를 첨부하세요.')
 
     setBusy(true)
     try {
-      const round = contract.current_round // 현재 라운드(요청 시 부여됨)
+      const round = contract.current_round
       const nextVersion = await nextFileVersion(id)
-
-      // 이 라운드의 round_id 를 찾아둔다 (코멘트를 라운드에 연결하기 위함)
       const { data: rd } = await supabase.from('review_rounds')
         .select('id').eq('contract_id', id).eq('round_no', round).single()
       const roundId = rd?.id ?? null
 
-      // 1) 수정본 업로드 (revision)
       await uploadFilePair({ contractId: id, kind: 'revision', version: nextVersion, pdfFile, hwpFile })
 
-      // 2) 코멘트 저장 (조항+내용이 있는 것만) — round_id 로 라운드에 연결
-      const validComments = comments.filter((c) => c.body.trim())
-      if (validComments.length > 0) {
-        await supabase.from('comments').insert(
-          validComments.map((c) => ({
-            contract_id: id,
-            round_id: roundId,
-            author_id: session.user.id,
-            clause_ref: c.clause.trim() || null,
-            body: c.body.trim(),
-          }))
-        )
+      const valid = comments.filter((c) => c.body.trim())
+      if (valid.length > 0) {
+        await supabase.from('comments').insert(valid.map((c) => ({
+          contract_id: id, round_id: roundId, author_id: session.user.id,
+          clause_ref: c.clause.trim() || null, body: c.body.trim(),
+        })))
       }
 
-      // 3) 라운드 결과 기록 (해당 라운드의 검토 완료)
       await supabase.from('review_rounds')
         .update({ result: 'approved', review_msg: '검토 완료', reviewed_by: session.user.id, reviewed_at: new Date().toISOString() })
         .eq('contract_id', id).eq('round_no', round)
-
-      // 4) 상태 전환: 의뢰자 검토로
       await supabase.from('contracts').update({ status: 'client_reviewing' }).eq('id', id)
-
-      // 5) 히스토리 + 의뢰자 노티
-      await supabase.from('history').insert({
-        contract_id: id, event: 'review_done', actor_id: session.user.id, detail: { round },
-      })
+      await supabase.from('history').insert({ contract_id: id, event: 'review_done', actor_id: session.user.id, detail: { round } })
       await supabase.from('notifications').insert({
-        contract_id: id,
-        recipient_id: contract.owner_id,
-        type: 'review_done',
+        contract_id: id, recipient_id: contract.owner_id, type: 'review_done',
         title: `${contract.title} ${round}차 검토 의견이 등록되었습니다.`,
       })
 
       navigate(`/contracts/${id}`)
     } catch (err) {
       setError('처리 실패: ' + (err.message ?? String(err)))
-    } finally {
-      setBusy(false)
-    }
+    } finally { setBusy(false) }
   }
 
   if (loading) return <p style={s.msg}>불러오는 중…</p>
@@ -122,84 +99,93 @@ export default function LawyerReview() {
   const isLawyer = profile?.role === 'lawyer'
 
   return (
-    <div style={s.wrap}>
+    <div style={s.page}>
+      {/* 상단 바 */}
       <div style={s.head}>
         <button style={s.back} onClick={() => navigate(`/contracts/${id}`)}>← 상세로</button>
         <span style={s.title}>{contract.title} · 검토</span>
+        {/* PDF 버전 선택 */}
+        {pdfList.length > 0 && (
+          <select style={s.select} onChange={(e) => showPdf(pdfList[e.target.value])}>
+            {pdfList.map((f, i) => (
+              <option key={f.id} value={i}>V{f.version} · {f.kind}</option>
+            ))}
+          </select>
+        )}
       </div>
 
-      {!isLawyer && <p style={s.warn}>변호사 계정에서만 검토를 완료할 수 있습니다. (열람은 가능)</p>}
+      {!isLawyer && <p style={s.warn}>변호사 계정에서만 검토를 완료할 수 있습니다.</p>}
 
-      <div style={s.section}>
-        <div style={s.secTitle}>계약서 열어보기</div>
-        {latestFiles.length === 0 ? <div style={s.dim}>파일 없음</div> : latestFiles.map((f) => (
-          <div key={f.id} style={s.fileRow}>
-            <span>{contract.title}_V{f.version} · {f.format.toUpperCase()}</span>
-            <button style={s.dl} onClick={() => openFile(f.storage_path)}>열기</button>
+      {/* 2단: 왼쪽 본문 / 오른쪽 코멘트 */}
+      <div style={s.split}>
+        <div style={s.left}>
+          {pdfUrl ? (
+            <iframe title="contract-pdf" src={pdfUrl} style={s.iframe} />
+          ) : (
+            <div style={s.noPdf}>표시할 PDF가 없습니다.</div>
+          )}
+        </div>
+
+        <div style={s.right}>
+          <div style={s.secTitle}>검토 코멘트</div>
+          <div style={s.comments}>
+            {comments.map((c, i) => (
+              <div key={i} style={s.cRow}>
+                <input style={s.clause} placeholder="제3조" value={c.clause}
+                  onChange={(e) => updateComment(i, 'clause', e.target.value)} />
+                <textarea style={s.cbody} placeholder="코멘트 내용" rows={2} value={c.body}
+                  onChange={(e) => updateComment(i, 'body', e.target.value)} />
+                {comments.length > 1 && <button style={s.rm} onClick={() => removeComment(i)}>×</button>}
+              </div>
+            ))}
+            <button style={s.add} onClick={addComment}>+ 코멘트 추가</button>
           </div>
-        ))}
-      </div>
 
-      <div style={s.section}>
-        <div style={s.secTitle}>검토 코멘트</div>
-        {comments.map((c, i) => (
-          <div key={i} style={s.commentRow}>
-            <input style={s.clause} placeholder="조항 (예: 제3조)" value={c.clause}
-              onChange={(e) => updateComment(i, 'clause', e.target.value)} />
-            <textarea style={s.cbody} placeholder="코멘트 내용" rows={2} value={c.body}
-              onChange={(e) => updateComment(i, 'body', e.target.value)} />
-            {comments.length > 1 && (
-              <button style={s.rm} onClick={() => removeComment(i)}>×</button>
-            )}
-          </div>
-        ))}
-        <button style={s.add} onClick={addComment}>+ 코멘트 추가</button>
-      </div>
+          <div style={s.secTitle}>수정본 업로드</div>
+          <div style={s.uprow}><span style={s.uplabel}>PDF *</span>
+            <input type="file" accept="application/pdf" onChange={(e) => setPdfFile(e.target.files[0] ?? null)} /></div>
+          <div style={s.uprow}><span style={s.uplabel}>HWP</span>
+            <input type="file" accept=".hwp,.hwpx" onChange={(e) => setHwpFile(e.target.files[0] ?? null)} /></div>
 
-      <div style={s.section}>
-        <div style={s.secTitle}>수정본 업로드</div>
-        <div style={s.uprow}><span style={s.uplabel}>PDF (필수)</span>
-          <input type="file" accept="application/pdf" onChange={(e) => setPdfFile(e.target.files[0] ?? null)} /></div>
-        <div style={s.uprow}><span style={s.uplabel}>HWP (권장)</span>
-          <input type="file" accept=".hwp,.hwpx" onChange={(e) => setHwpFile(e.target.files[0] ?? null)} /></div>
+          {error && <p style={s.error}>{error}</p>}
+          <button style={{ ...s.complete, opacity: isLawyer ? 1 : 0.5 }}
+            onClick={handleComplete} disabled={busy || !isLawyer}>
+            {busy ? '처리 중…' : '검토 완료 (의뢰자에게 전달)'}
+          </button>
+        </div>
       </div>
-
-      {error && <p style={s.error}>{error}</p>}
-      <button style={{ ...s.complete, opacity: isLawyer ? 1 : 0.5 }}
-        onClick={handleComplete} disabled={busy || !isLawyer}>
-        {busy ? '처리 중…' : '검토 완료 (의뢰자에게 전달)'}
-      </button>
     </div>
   )
 }
 
-// 이 계약의 다음 파일 버전 번호 = max(version)+1
 async function nextFileVersion(contractId) {
   const { data } = await supabase.from('files').select('version')
     .eq('contract_id', contractId).order('version', { ascending: false }).limit(1)
-  const max = data && data.length ? data[0].version : 0
-  return max + 1
+  return (data && data.length ? data[0].version : 0) + 1
 }
 
 const s = {
-  wrap: { padding: '16px 20px', maxWidth: 640, fontFamily: 'sans-serif' },
+  page: { display: 'flex', flexDirection: 'column', height: 'calc(100vh - 45px)', fontFamily: 'sans-serif' },
   msg: { padding: '16px 20px', color: '#78716c', fontSize: 13, fontFamily: 'sans-serif' },
-  head: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 },
+  head: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: '1px solid #e7e5e4' },
   back: { border: '1px solid #d6d3d1', background: '#fff', borderRadius: 6, padding: '5px 10px', fontSize: 12, cursor: 'pointer' },
-  title: { fontSize: 15, fontWeight: 500 },
-  warn: { background: '#fef3c7', color: '#92400e', fontSize: 12, padding: '8px 10px', borderRadius: 8, marginBottom: 14 },
-  section: { marginBottom: 18 },
-  secTitle: { fontSize: 13, fontWeight: 500, marginBottom: 8 },
-  dim: { color: '#a8a29e', fontSize: 12 },
-  fileRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0', fontSize: 12 },
-  dl: { border: '1px solid #d6d3d1', background: '#fff', borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer' },
-  commentRow: { display: 'flex', gap: 6, marginBottom: 8, alignItems: 'flex-start' },
-  clause: { width: 110, flexShrink: 0, height: 34, padding: '0 8px', border: '1px solid #d6d3d1', borderRadius: 6, fontSize: 13 },
+  title: { fontSize: 14, fontWeight: 500 },
+  select: { marginLeft: 'auto', height: 30, border: '1px solid #d6d3d1', borderRadius: 6, fontSize: 12, padding: '0 6px' },
+  warn: { background: '#fef3c7', color: '#92400e', fontSize: 12, padding: '8px 16px', margin: 0 },
+  split: { display: 'flex', flex: 1, minHeight: 0 },
+  left: { flex: '1 1 62%', borderRight: '1px solid #e7e5e4', minWidth: 0, background: '#f5f5f4' },
+  iframe: { width: '100%', height: '100%', border: 'none' },
+  noPdf: { padding: 20, color: '#a8a29e', fontSize: 13 },
+  right: { flex: '1 1 38%', minWidth: 300, overflowY: 'auto', padding: '14px 16px' },
+  secTitle: { fontSize: 13, fontWeight: 500, margin: '4px 0 8px' },
+  comments: { marginBottom: 18 },
+  cRow: { display: 'flex', gap: 6, marginBottom: 8, alignItems: 'flex-start' },
+  clause: { width: 78, flexShrink: 0, height: 34, padding: '0 8px', border: '1px solid #d6d3d1', borderRadius: 6, fontSize: 13 },
   cbody: { flex: 1, padding: '6px 8px', border: '1px solid #d6d3d1', borderRadius: 6, fontSize: 13, fontFamily: 'inherit', resize: 'vertical' },
   rm: { width: 28, height: 34, border: '1px solid #d6d3d1', background: '#fff', borderRadius: 6, cursor: 'pointer', color: '#78716c' },
   add: { border: '1px dashed #d6d3d1', background: '#fff', borderRadius: 6, padding: '5px 10px', fontSize: 12, cursor: 'pointer', color: '#57534e' },
   uprow: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, fontSize: 13 },
-  uplabel: { width: 80, color: '#57534e' },
+  uplabel: { width: 50, color: '#57534e' },
   error: { color: '#b91c1c', fontSize: 12, margin: '8px 0' },
-  complete: { height: 40, padding: '0 20px', border: 'none', borderRadius: 8, background: '#1c1917', color: '#fff', fontSize: 14, cursor: 'pointer' },
+  complete: { width: '100%', height: 40, marginTop: 10, border: 'none', borderRadius: 8, background: '#1c1917', color: '#fff', fontSize: 14, cursor: 'pointer' },
 }

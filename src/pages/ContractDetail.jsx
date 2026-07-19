@@ -1,8 +1,8 @@
 // 계약 상세 화면 (방식 A: 별도 전체 페이지).
 // 역할·상태별 액션 버튼 + 라운드별 주고받은 내용(요청 메시지·코멘트)을 양쪽 다 표시.
 
-import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useEffect, useState, useRef } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../AuthContext'
 import { getFileUrl } from '../lib/storage'
@@ -24,6 +24,8 @@ function timeOf(ts) { return new Date(ts).toLocaleTimeString('ko-KR', { hour: '2
 export default function ContractDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const targetRound = searchParams.get('round')  // 알림에서 넘어온 라운드
   const { session, profile } = useAuth()
   const [contract, setContract] = useState(null)
   const [events, setEvents] = useState([])
@@ -51,6 +53,21 @@ export default function ContractDetail() {
     setLoading(false)
   }
   useEffect(() => { load() }, [id])
+
+  // 알림에서 넘어온 라운드가 있으면, 그 라운드의 '검토 완료' 이벤트를 자동으로 펼치고 스크롤한다.
+  const targetRef = useRef(null)
+  useEffect(() => {
+    if (!targetRound || events.length === 0) return
+    // 해당 라운드의 이벤트(검토 완료 우선, 없으면 검토 요청) 찾기
+    const done = events.find((e) => e.event === 'review_done' && String(e.detail?.round) === String(targetRound))
+    const req = events.find((e) => e.event === 'review_requested' && String(e.detail?.round) === String(targetRound))
+    const target = done || req
+    if (target) {
+      setOpenId(target.id)
+      // 렌더 후 스크롤
+      setTimeout(() => { targetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }, 100)
+    }
+  }, [targetRound, events])
 
   async function openFile(path) {
     try { window.open(await getFileUrl(path), '_blank') }
@@ -159,9 +176,10 @@ export default function ContractDetail() {
                 const rd = round ? roundOf(round) : null
                 const reqMsg = rd?.request_msg
                 const roundComments = round ? commentsOfRound(round) : []
+                const isTarget = openId === ev.id && String(round) === String(targetRound)
                 return (
-                  <div key={ev.id} style={st.item}>
-                    <button style={st.itemHead} onClick={() => setOpenId(open ? null : ev.id)}>
+                  <div key={ev.id} style={st.item} ref={isTarget ? targetRef : null}>
+                    <button style={{ ...st.itemHead, ...(isTarget ? st.itemTarget : {}) }} onClick={() => setOpenId(open ? null : ev.id)}>
                       <span style={st.time}>{timeOf(ev.created_at)}</span>
                       <span style={st.evName}>{EVENT_LABEL[ev.event] ?? ev.event}{round ? ` (${round}차)` : ''}</span>
                       <span style={st.chev}>{open ? '▲' : '▼'}</span>
@@ -221,6 +239,7 @@ const st = {
   dayLabel: { fontSize: 12, color: '#a8a29e', margin: '0 0 6px' },
   item: { marginBottom: 6 },
   itemHead: { width: '100%', display: 'flex', alignItems: 'center', gap: 10, background: '#f5f5f4', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer', textAlign: 'left' },
+  itemTarget: { background: '#eef2ff', boxShadow: '0 0 0 2px #c7d2fe' },
   time: { fontSize: 11, color: '#78716c', minWidth: 38 },
   evName: { fontSize: 13, flex: 1 },
   chev: { fontSize: 9, color: '#a8a29e' },

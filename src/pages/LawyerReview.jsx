@@ -83,6 +83,7 @@ export default function LawyerReview() {
       await supabase.from('history').insert({ contract_id: id, event: 'review_done', actor_id: session.user.id, detail: { round } })
       await supabase.from('notifications').insert({
         contract_id: id, recipient_id: contract.owner_id, type: 'review_done',
+        round,
         title: `${contract.title} ${round}차 검토 의견이 등록되었습니다.`,
       })
 

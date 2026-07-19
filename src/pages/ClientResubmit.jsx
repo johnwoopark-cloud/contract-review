@@ -68,6 +68,7 @@ export default function ClientResubmit() {
         const who = profile?.name ?? ''
         await supabase.from('notifications').insert({
           contract_id: id, recipient_id: contract.lawyer_id, type: 'review_request',
+          round: nextRound,
           title: `[${dept}·${who}] ${contract.title} ${nextRound}차 검토 요청이 있습니다.`,
         })
       }

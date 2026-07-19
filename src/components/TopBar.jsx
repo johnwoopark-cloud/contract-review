@@ -1,6 +1,7 @@
-// 상단 바. 로그인한 사람의 부서·성명과 로그아웃 버튼을 보여준다.
+// 상단 바. 서비스명 + 알림 벨 + 로그인 사용자 정보 + 로그아웃.
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../AuthContext'
+import NotificationBell from './NotificationBell'
 
 export default function TopBar() {
   const { profile } = useAuth()
@@ -11,8 +12,9 @@ export default function TopBar() {
 
   return (
     <div style={styles.bar}>
-      <span style={styles.brand}>계약 사전검토</span>
+      <span style={styles.brand}>KBS미디어 계약 이력 관리</span>
       <div style={styles.right}>
+        <NotificationBell />
         <span>
           {profile ? `${profile.department ?? ''} · ${profile.name ?? profile.email}` : ''}
         </span>

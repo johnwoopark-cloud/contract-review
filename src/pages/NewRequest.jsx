@@ -85,6 +85,7 @@ export default function NewRequest() {
           contract_id: contract.id,
           recipient_id: lawyer.id,
           type: 'review_request',
+          round: 1,
           title: `[${dept}·${who}] ${title.trim()} 1차 검토 요청이 있습니다.`,
         })
       }

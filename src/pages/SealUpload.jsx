@@ -10,6 +10,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../AuthContext'
 import { uploadFilePair } from '../lib/files'
+import FileDrop from '../components/FileDrop'
 
 export default function SealUpload() {
   const { id } = useParams()
@@ -73,9 +74,8 @@ export default function SealUpload() {
       </div>
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: 14 }}>
-          <label style={s.label}>최종 날인본 PDF (필수)</label>
-          <input type="file" accept="application/pdf" onChange={(e) => setPdfFile(e.target.files[0] ?? null)} />
-          <p style={s.hint}>날인·서명이 완료된 최종 계약서를 올리세요. 업로드하면 계약이 ‘최종 완료’ 처리됩니다.</p>
+          <FileDrop label="최종 날인본 PDF (필수)" accept="application/pdf" file={pdfFile} onFile={setPdfFile} hint="날인·서명이 완료된 최종 계약서" />
+          <p style={s.hint}>업로드하면 계약이 ‘최종 완료’ 처리됩니다.</p>
         </div>
         {error && <p style={s.error}>{error}</p>}
         <button style={s.button} type="submit" disabled={busy}>

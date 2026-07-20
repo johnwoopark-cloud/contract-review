@@ -9,6 +9,7 @@ import { supabase } from '../supabaseClient'
 import { useAuth } from '../AuthContext'
 import { getFileUrl } from '../lib/storage'
 import { uploadFilePair } from '../lib/files'
+import FileDrop from '../components/FileDrop'
 
 export default function LawyerReview() {
   const { id } = useParams()
@@ -143,10 +144,12 @@ export default function LawyerReview() {
           </div>
 
           <div style={s.secTitle}>수정본 업로드</div>
-          <div style={s.uprow}><span style={s.uplabel}>PDF *</span>
-            <input type="file" accept="application/pdf" onChange={(e) => setPdfFile(e.target.files[0] ?? null)} /></div>
-          <div style={s.uprow}><span style={s.uplabel}>HWP</span>
-            <input type="file" accept=".hwp,.hwpx" onChange={(e) => setHwpFile(e.target.files[0] ?? null)} /></div>
+          <div style={{ marginBottom: 10 }}>
+            <FileDrop label="PDF (필수)" accept="application/pdf" file={pdfFile} onFile={setPdfFile} />
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <FileDrop label="HWP (권장)" accept=".hwp,.hwpx" file={hwpFile} onFile={setHwpFile} />
+          </div>
 
           {error && <p style={s.error}>{error}</p>}
           <button style={{ ...s.complete, opacity: isLawyer ? 1 : 0.5 }}

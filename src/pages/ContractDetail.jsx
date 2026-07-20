@@ -161,6 +161,23 @@ export default function ContractDetail() {
         상대방: {contract.counterparty ?? '-'} · 의뢰자: {contract.owner?.name ?? '-'} ({contract.owner?.department ?? '-'})
       </div>
 
+      {(contract.context_info?.background || contract.context_info?.special_request) && (
+        <div style={st.infoWrap}>
+          {contract.context_info?.background && (
+            <div style={st.infoCard}>
+              <div style={st.infoHead}>계약 배경</div>
+              <div style={st.infoText}>{contract.context_info.background}</div>
+            </div>
+          )}
+          {contract.context_info?.special_request && (
+            <div style={st.infoCard}>
+              <div style={st.infoHead}>특별 검토 요청</div>
+              <div style={st.infoText}>{contract.context_info.special_request}</div>
+            </div>
+          )}
+        </div>
+      )}
+
       {days.length === 0 ? (
         <p style={st.msg}>아직 이력이 없습니다.</p>
       ) : (
@@ -186,12 +203,35 @@ export default function ContractDetail() {
                     </button>
                     {open && (
                       <div style={st.detail}>
-                        {/* 검토 요청 → 의뢰자가 남긴 요청 메시지 */}
+                        {/* 검토 요청 → 1차는 배경·특별사항(구분 카드), 재요청은 요청 메시지 */}
                         {isRequest && (
-                          <div style={st.msgBlock}>
-                            <span style={{ ...st.who, ...st.whoClient }}>의뢰자</span>
-                            <span>{reqMsg ? reqMsg : <em style={st.dim}>메시지 없음</em>}</span>
-                          </div>
+                          round === 1 ? (
+                            <div style={st.msgBlock}>
+                              <span style={{ ...st.who, ...st.whoClient }}>의뢰자</span>
+                              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                {contract.context_info?.background && (
+                                  <div style={st.infoCard}>
+                                    <div style={st.infoHead}>계약 배경</div>
+                                    <div style={st.infoText}>{contract.context_info.background}</div>
+                                  </div>
+                                )}
+                                {contract.context_info?.special_request && (
+                                  <div style={st.infoCard}>
+                                    <div style={st.infoHead}>특별 검토 요청</div>
+                                    <div style={st.infoText}>{contract.context_info.special_request}</div>
+                                  </div>
+                                )}
+                                {!contract.context_info?.background && !contract.context_info?.special_request && (
+                                  <em style={st.dim}>입력한 내용 없음</em>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={st.msgBlock}>
+                              <span style={{ ...st.who, ...st.whoClient }}>의뢰자</span>
+                              <span style={st.leftText}>{reqMsg ? reqMsg : <em style={st.dim}>메시지 없음</em>}</span>
+                            </div>
+                          )
                         )}
 
                         {/* 검토 완료 → 변호사 코멘트(라운드별) */}
@@ -200,7 +240,7 @@ export default function ContractDetail() {
                             <div key={c.id} style={st.msgBlock}>
                               <span style={{ ...st.who, ...st.whoLawyer }}>변호사</span>
                               {c.clause_ref && <span style={st.clauseTag}>{c.clause_ref}</span>}
-                              <span>{c.body}</span>
+                              <span style={st.leftText}>{c.body}</span>
                             </div>
                           )) : <div style={st.dim}>코멘트 없음</div>
                         )}
@@ -234,7 +274,13 @@ const st = {
   badge: { background: '#eef2ff', color: '#4338ca', fontSize: 11, padding: '3px 9px', borderRadius: 20 },
   action: { border: 'none', background: '#1c1917', color: '#fff', borderRadius: 8, padding: '7px 14px', fontSize: 13, cursor: 'pointer' },
   actionLight: { border: '1px solid #d6d3d1', background: '#fff', color: '#44403c', borderRadius: 8, padding: '7px 14px', fontSize: 13, cursor: 'pointer' },
-  meta: { fontSize: 12, color: '#78716c', marginBottom: 16 },
+  meta: { fontSize: 12, color: '#78716c', marginBottom: 12 },
+  infoWrap: { display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 },
+  infoCard: { background: '#f5f5f4', border: '1px solid #eceae8', borderRadius: 10, padding: '10px 14px' },
+  infoHead: { fontSize: 11, fontWeight: 600, color: '#4338ca', marginBottom: 4, textAlign: 'left' },
+  infoText: { fontSize: 13, color: '#292524', lineHeight: 1.6, whiteSpace: 'pre-wrap', textAlign: 'left' },
+  miniLabel: { fontSize: 11, color: '#4338ca', marginRight: 4 },
+  leftText: { textAlign: 'left', flex: 1, lineHeight: 1.6, whiteSpace: 'pre-wrap' },
   timeline: { borderLeft: '2px solid #e7e5e4', paddingLeft: 14, marginLeft: 4 },
   dayLabel: { fontSize: 12, color: '#a8a29e', margin: '0 0 6px' },
   item: { marginBottom: 6 },

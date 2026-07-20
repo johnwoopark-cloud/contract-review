@@ -10,6 +10,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../AuthContext'
 import { uploadFilePair } from '../lib/files'
+import FileDrop from '../components/FileDrop'
 
 export default function ClientResubmit() {
   const { id } = useParams()
@@ -100,12 +101,10 @@ export default function ClientResubmit() {
             placeholder="상대방과 협의한 내용, 이번에 반영한 수정 사항 등을 적어주세요." />
         </div>
         <div style={{ marginBottom: 14 }}>
-          <label style={s.label}>수정본 PDF (필수)</label>
-          <input type="file" accept="application/pdf" onChange={(e) => setPdfFile(e.target.files[0] ?? null)} />
+          <FileDrop label="수정본 PDF (필수)" accept="application/pdf" file={pdfFile} onFile={setPdfFile} />
         </div>
         <div style={{ marginBottom: 14 }}>
-          <label style={s.label}>수정본 HWP (권장)</label>
-          <input type="file" accept=".hwp,.hwpx" onChange={(e) => setHwpFile(e.target.files[0] ?? null)} />
+          <FileDrop label="수정본 HWP (권장)" accept=".hwp,.hwpx" file={hwpFile} onFile={setHwpFile} />
         </div>
         {error && <p style={s.error}>{error}</p>}
         <button style={s.button} type="submit" disabled={busy}>
